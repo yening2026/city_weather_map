@@ -229,18 +229,69 @@
         /* 移动端响应式 */
         @media (max-width: 900px) {
             .city-cards {
-                flex-direction: column;
-                align-items: center;
-                top: auto;
-                bottom: 20px;
+                flex-direction: row;
+                align-items: flex-start;
+                top: 10px;
                 left: 10px;
                 right: 10px;
+                bottom: auto;
+                gap: 8px;
+                flex-wrap: wrap;
             }
             
             .city-card {
-                min-width: unset;
-                width: 100%;
-                max-width: 300px;
+                min-width: 100px;
+                max-width: 110px;
+                padding: 10px;
+                font-size: 11px;
+            }
+            
+            .city-card.expanded {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                min-width: 90vw;
+                max-width: 90vw;
+                max-height: 80vh;
+                overflow-y: auto;
+                z-index: 2000;
+            }
+            
+            .city-name {
+                font-size: 12px;
+                margin-bottom: 4px;
+            }
+            
+            .city-name .en {
+                font-size: 9px;
+            }
+            
+            .city-time {
+                font-size: 18px;
+                margin-bottom: 6px;
+            }
+            
+            .weather-icon {
+                font-size: 24px;
+            }
+            
+            .temp {
+                font-size: 18px;
+            }
+            
+            .weather-desc {
+                font-size: 10px;
+            }
+            
+            .clothing-tip {
+                font-size: 9px;
+                padding: 6px 8px;
+            }
+            
+            .expand-indicator {
+                font-size: 8px;
+                margin-top: 6px;
             }
         }
         
@@ -448,15 +499,62 @@
             .flight-panel {
                 left: 10px;
                 right: 10px;
-                bottom: auto;
-                top: 20px;
+                bottom: 10px;
+                top: auto;
                 max-width: unset;
                 min-width: unset;
+                max-height: 40vh;
+                padding: 12px;
             }
             
-            .city-cards {
-                top: auto;
-                bottom: 20px;
+            .flight-panel h3 {
+                font-size: 14px;
+                margin-bottom: 10px;
+            }
+            
+            .flight-segment {
+                padding: 8px;
+                margin-bottom: 10px;
+            }
+            
+            .flight-number {
+                font-size: 13px;
+                margin-bottom: 6px;
+            }
+            
+            .flight-route {
+                font-size: 12px;
+                margin-bottom: 6px;
+            }
+            
+            .flight-times {
+                font-size: 11px;
+            }
+            
+            .flight-time-value {
+                font-size: 12px;
+            }
+            
+            .flight-duration {
+                font-size: 10px;
+            }
+            
+            .transfer-time {
+                font-size: 11px;
+                padding: 8px;
+                margin: 6px 0;
+            }
+            
+            .total-duration {
+                font-size: 12px;
+                margin-top: 8px;
+                padding-top: 8px;
+            }
+            
+            .route-info, .route-warning, .route-resources {
+                font-size: 9px;
+                padding: 6px;
+                margin-top: 6px;
             }
         }
     </style>
