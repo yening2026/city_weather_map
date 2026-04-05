@@ -467,13 +467,13 @@
     <div class="flight-panel">
         <h3>✈️ 航班信息 Flight Info</h3>
         
-        <div class="flight-segment">
+        <div class="flight-segment" style="border-left-color: #2196F3;">
             <div class="flight-number">
                 🛫 OS 016
             </div>
             <div class="flight-route">
                 <span>上海 PVG</span>
-                <span class="arrow">→</span>
+                <span class="arrow" style="color: #2196F3;">→</span>
                 <span>维也纳 VIE</span>
             </div>
             <div class="flight-times">
@@ -495,13 +495,13 @@
             🕐 维也纳转机 Transfer at Vienna: <strong id="transfer-duration">--</strong>
         </div>
         
-        <div class="flight-segment">
+        <div class="flight-segment" style="border-left-color: #FFD700;">
             <div class="flight-number">
                 🛫 OS 189
             </div>
             <div class="flight-route">
                 <span>维也纳 VIE</span>
-                <span class="arrow">→</span>
+                <span class="arrow" style="color: #FFD700;">→</span>
                 <span>慕尼黑 MUC</span>
             </div>
             <div class="flight-times">
@@ -791,23 +791,23 @@
             { lat: 31.23, lon: 121.47, name: '上海浦东', desc: 'Shanghai Pudong', country: '🇨🇳 中国 China', warning: false }
         ];
         
-        // 绘制OS 016航线 (上海 → 维也纳) - 通过实际途经点
+        // 绘制OS 016航线 (上海 → 维也纳) - 蓝色
         const route1Path = route1Waypoints.map(wp => [wp.lat, wp.lon]);
         L.polyline(route1Path, {
-            color: '#e94560',
+            color: '#2196F3',
             weight: 3,
             opacity: 0.8,
             dashArray: '10, 5',
             className: 'flight-route-line'
         }).addTo(map).bindPopup('✈️ OS 016: 上海 → 维也纳<br/><small>点击途经点查看详情</small>');
         
-        // 绘制OS 189航线 (维也纳 → 慕尼黑)
+        // 绘制OS 189航线 (维也纳 → 慕尼黑) - 黄色
         const route2Path = [
             [cities.vienna.lat, cities.vienna.lon],
             [cities.munich.lat, cities.munich.lon]
         ];
         L.polyline(route2Path, {
-            color: '#00d9ff',
+            color: '#FFD700',
             weight: 3,
             opacity: 0.8,
             dashArray: '10, 5',
