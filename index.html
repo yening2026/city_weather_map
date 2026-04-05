@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>城市天气地图 - City Weather Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #1a1a2e;
+            --accent: #e94560;
+            --bg: #16213e;
+            --card-bg: rgba(22, 33, 62, 0.95);
+            --text: #eaeaea;
+            --shanghai: #e94560;
+            --vienna: #ffd700;
+            --munich: #00d9ff;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        .city-cards {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            justify-content: flex-start;
+            gap: 16px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .city-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 16px;
+            min-width: 180px;
+            max-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            pointer-events: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            overflow: hidden;
+        }
+        
+        .city-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+        
+        .city-card.expanded {
+            min-width: 320px;
+            max-width: 360px;
+        }
+        
+        .city-card.shanghai { border-top: 3px solid var(--shanghai); }
+        .city-card.vienna { border-top: 3px solid var(--vienna); }
+        .city-card.munich { border-top: 3px solid var(--munich); }
+        
+        .city-name {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .city-name .en {
+            font-size: 10px;
+            opacity: 0.7;
+            font-weight: 400;
+        }
+        
+        .city-time {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        
+        .weather-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .weather-icon {
+            font-size: 28px;
+        }
+        
+        .temp {
+            font-size: 22px;
+            font-weight: 700;
+        }
+        
+        .weather-desc {
+            font-size: 12px;
+            opacity: 0.8;
+            width: 100%;
+        }
+        
+        .clothing-tip {
+            font-size: 11px;
+            padding: 8px 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .clothing-tip .icon {
+            font-size: 14px;
+        }
+        
+        /* 展开详情 */
+        .city-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        
+        .city-card.expanded .city-details {
+            max-height: 500px;
+        }
+        
+        .temp-range {
+            font-size: 14px;
+            margin: 12px 0;
+            opacity: 0.9;
+        }
+        
+        .hourly-chart {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .hourly-title {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            opacity: 0.8;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 120px;
+            margin-bottom: 8px;
+        }
+        
+        .chart-line {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .hourly-hours {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+        
+        .expand-indicator {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 10px;
+            opacity: 0.5;
+        }
+        
+        /* 脉冲动画标记 */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .marker-pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        /*Leaflet 样式覆盖 */
+        .leaflet-popup-content-wrapper {
+            background: var(--card-bg);
+            color: var(--text);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+        }
+        
+        .leaflet-popup-tip {
+            background: var(--card-bg);
+        }
+        
+        /* 移动端响应式 */
+        @media (max-width: 900px) {
+            .city-cards {
+                flex-direction: column;
+                align-items: center;
+                top: auto;
+                bottom: 20px;
+                left: 10px;
+                right: 10px;
+            }
+            
+            .city-card {
+                min-width: unset;
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+        
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 航班信息面板 */
+        .flight-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            top: 20px;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 20px;
+            min-width: 320px;
+            max-width: 400px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+            pointer-events: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        
+        .flight-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .flight-panel::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+        
+        .flight-panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .flight-panel::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .flight-panel h3 {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--accent);
+        }
+        
+        .flight-segment {
+            margin-bottom: 16px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid var(--accent);
+        }
+        
+        .flight-segment:last-child {
+            margin-bottom: 0;
+        }
+        
+        .flight-number {
+            font-weight: 700;
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .flight-route {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .flight-route .arrow {
+            color: var(--accent);
+        }
+        
+        .flight-times {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 12px;
+            margin-bottom: 6px;
+        }
+        
+        .flight-time-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .flight-time-label {
+            opacity: 0.6;
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+        
+        .flight-time-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        .flight-duration {
+            font-size: 12px;
+            opacity: 0.8;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .transfer-time {
+            text-align: center;
+            padding: 10px;
+            background: rgba(233, 69, 96, 0.1);
+            border-radius: 8px;
+            font-size: 13px;
+            margin: 8px 0;
+            border: 1px dashed var(--accent);
+        }
+        
+        .total-duration {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 700;
+            text-align: center;
+        }
+        
+        .route-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 11px;
+            opacity: 0.8;
+        }
+        
+        .route-warning {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(255, 165, 0, 0.15);
+            border: 1px solid rgba(255, 165, 0, 0.3);
+            border-radius: 6px;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        
+        .route-warning .icon {
+            display: inline-block;
+            margin-right: 4px;
+        }
+        
+        .route-resources {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(66, 135, 245, 0.15);
+            border: 1px solid rgba(66, 135, 245, 0.3);
+            border-radius: 6px;
+            font-size: 11px;
+        }
+        
+        .route-resources a {
+            color: #4287f5;
+            text-decoration: none;
+        }
+        
+        .route-resources a:hover {
+            text-decoration: underline;
+        }
+        
+        /* 航线动画 */
+        @keyframes dash {
+            to { stroke-dashoffset: 0; }
+        }
+        
+        .flight-route-line {
+            stroke-dasharray: 10, 5;
+            animation: dash 30s linear infinite;
+        }
+        
+        /* 移动端响应式 - 航班面板 */
+        @media (max-width: 900px) {
+            .flight-panel {
+                left: 10px;
+                right: 10px;
+                bottom: auto;
+                top: 20px;
+                max-width: unset;
+                min-width: unset;
+            }
+            
+            .city-cards {
+                top: auto;
+                bottom: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="flight-panel">
+        <h3>✈️ 航班信息 Flight Info</h3>
+        
+        <div class="flight-segment">
+            <div class="flight-number">
+                🛫 OS 016
+            </div>
+            <div class="flight-route">
+                <span>上海 PVG</span>
+                <span class="arrow">→</span>
+                <span>维也纳 VIE</span>
+            </div>
+            <div class="flight-times">
+                <div class="flight-time-item">
+                    <span class="flight-time-label">起飞 Departure</span>
+                    <span class="flight-time-value" id="flight1-departure">--:--</span>
+                </div>
+                <div class="flight-time-item">
+                    <span class="flight-time-label">到达 Arrival</span>
+                    <span class="flight-time-value" id="flight1-arrival">--:--</span>
+                </div>
+            </div>
+            <div class="flight-duration">
+                ⏱️ 飞行时长: <strong id="flight1-duration">--</strong>
+            </div>
+        </div>
+        
+        <div class="transfer-time">
+            🕐 维也纳转机 Transfer at Vienna: <strong id="transfer-duration">--</strong>
+        </div>
+        
+        <div class="flight-segment">
+            <div class="flight-number">
+                🛫 OS 189
+            </div>
+            <div class="flight-route">
+                <span>维也纳 VIE</span>
+                <span class="arrow">→</span>
+                <span>慕尼黑 MUC</span>
+            </div>
+            <div class="flight-times">
+                <div class="flight-time-item">
+                    <span class="flight-time-label">起飞 Departure</span>
+                    <span class="flight-time-value" id="flight2-departure">--:--</span>
+                </div>
+                <div class="flight-time-item">
+                    <span class="flight-time-label">到达 Arrival</span>
+                    <span class="flight-time-value" id="flight2-arrival">--:--</span>
+                </div>
+            </div>
+            <div class="flight-duration">
+                ⏱️ 飞行时长: <strong id="flight2-duration">--</strong>
+            </div>
+        </div>
+        
+        <div class="total-duration">
+            去程总时间 Outbound Total: <span id="total-duration">--</span>
+        </div>
+        
+        <hr style="border: none; border-top: 2px solid var(--accent); margin: 16px 0;">
+        
+        <h3 style="color: #9c27b0;">🔙 返程航班 Return Flight</h3>
+        
+        <div class="flight-segment" style="border-left-color: #9c27b0;">
+            <div class="flight-number">
+                🛬 CA 828
+            </div>
+            <div class="flight-route">
+                <span>慕尼黑 MUC</span>
+                <span class="arrow" style="color: #9c27b0;">→</span>
+                <span>上海 PVG</span>
+            </div>
+            <div class="flight-times">
+                <div class="flight-time-item">
+                    <span class="flight-time-label">起飞 Departure</span>
+                    <span class="flight-time-value" id="return-departure">--:--</span>
+                </div>
+                <div class="flight-time-item">
+                    <span class="flight-time-label">到达 Arrival</span>
+                    <span class="flight-time-value" id="return-arrival">--:--</span>
+                </div>
+            </div>
+            <div class="flight-duration">
+                ⏱️ 飞行时长: <strong id="return-duration">--</strong>
+            </div>
+        </div>
+        
+        <div class="route-info">
+            <strong>🗺️ 去程 Outbound (OS 016):</strong><br/>
+            中国 → 蒙古 → 俄罗斯(西伯利亚) → 白俄罗斯 → 波兰 → 奥地利<br/>
+            <strong style="color:#9c27b0;">🗺️ 返程 Return (CA 828):</strong><br/>
+            德国 → 波兰 → 白俄罗斯 → 俄罗斯 → 蒙古 → 中国
+        </div>
+        
+        <div class="route-warning">
+            <span class="icon">⚠️</span>
+            <strong>注意 Notice:</strong> 航线可能途经俄罗斯领空。建议查看实时航线以确认。<br/>
+            <em>Route may pass through Russian airspace. Check real-time tracking.</em>
+        </div>
+        
+        <div class="route-resources">
+            <strong>📍 实时航线追踪 Live Tracking:</strong><br/>
+            • <a href="https://www.flightradar24.com/data/flights/os16" target="_blank">OS 016 - FlightRadar24</a><br/>
+            • <a href="https://www.flightradar24.com/data/flights/ca828" target="_blank">CA 828 - FlightRadar24</a>
+        </div>
+    </div>
+    
+    <div class="city-cards">
+        <!-- 慕尼黑卡片 -->
+        <div class="city-card munich" id="card-munich">
+            <div class="city-name">
+                🇩🇪 慕尼黑
+                <span class="en">Munich</span>
+            </div>
+            <div class="city-time" id="time-munich">--:--:--</div>
+            <div class="weather-info">
+                <span class="weather-icon" id="icon-munich">🌤️</span>
+                <span class="temp" id="temp-munich">--°C</span>
+            </div>
+            <div class="weather-desc" id="desc-munich">加载中...</div>
+            <div class="clothing-tip" id="clothing-munich">
+                <span class="icon">👕</span>
+                <span>加载中...</span>
+            </div>
+            <div class="city-details">
+                <div class="temp-range" id="temprange-munich">
+                    最高 -- °C  最低 -- °C
+                </div>
+                <div class="hourly-chart">
+                    <div class="hourly-title">24小时温度 24-Hour Temperature</div>
+                    <div class="chart-container">
+                        <canvas id="chart-munich" width="360" height="120"></canvas>
+                    </div>
+                    <div class="hourly-hours" id="hours-munich"></div>
+                </div>
+            </div>
+            <div class="expand-indicator">点击展开详情 Click for details ▼</div>
+        </div>
+        
+        <!-- 维也纳卡片 -->
+        <div class="city-card vienna" id="card-vienna">
+            <div class="city-name">
+                🇦🇹 维也纳
+                <span class="en">Vienna</span>
+            </div>
+            <div class="city-time" id="time-vienna">--:--:--</div>
+            <div class="weather-info">
+                <span class="weather-icon" id="icon-vienna">🌤️</span>
+                <span class="temp" id="temp-vienna">--°C</span>
+            </div>
+            <div class="weather-desc" id="desc-vienna">加载中...</div>
+            <div class="clothing-tip" id="clothing-vienna">
+                <span class="icon">👕</span>
+                <span>加载中...</span>
+            </div>
+            <div class="city-details">
+                <div class="temp-range" id="temprange-vienna">
+                    最高 -- °C  最低 -- °C
+                </div>
+                <div class="hourly-chart">
+                    <div class="hourly-title">24小时温度 24-Hour Temperature</div>
+                    <div class="chart-container">
+                        <canvas id="chart-vienna" width="360" height="120"></canvas>
+                    </div>
+                    <div class="hourly-hours" id="hours-vienna"></div>
+                </div>
+            </div>
+            <div class="expand-indicator">点击展开详情 Click for details ▼</div>
+        </div>
+        
+        <!-- 上海卡片 -->
+        <div class="city-card shanghai" id="card-shanghai">
+            <div class="city-name">
+                🇨🇳 上海
+                <span class="en">Shanghai</span>
+            </div>
+            <div class="city-time" id="time-shanghai">--:--:--</div>
+            <div class="weather-info">
+                <span class="weather-icon" id="icon-shanghai">🌤️</span>
+                <span class="temp" id="temp-shanghai">--°C</span>
+            </div>
+            <div class="weather-desc" id="desc-shanghai">加载中...</div>
+            <div class="clothing-tip" id="clothing-shanghai">
+                <span class="icon">👕</span>
+                <span>加载中...</span>
+            </div>
+            <div class="city-details">
+                <div class="temp-range" id="temprange-shanghai">
+                    最高 -- °C  最低 -- °C
+                </div>
+                <div class="hourly-chart">
+                    <div class="hourly-title">24小时温度 24-Hour Temperature</div>
+                    <div class="chart-container">
+                        <canvas id="chart-shanghai" width="360" height="120"></canvas>
+                    </div>
+                    <div class="hourly-hours" id="hours-shanghai"></div>
+                </div>
+            </div>
+            <div class="expand-indicator">点击展开详情 Click for details ▼</div>
+        </div>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // 城市数据
+        const cities = {
+            shanghai: {
+                name: '上海',
+                nameEn: 'Shanghai',
+                lat: 31.2304,
+                lon: 121.4737,
+                timezone: 'Asia/Shanghai',
+                color: '#e94560'
+            },
+            vienna: {
+                name: '维也纳',
+                nameEn: 'Vienna',
+                lat: 48.2082,
+                lon: 16.3738,
+                timezone: 'Europe/Vienna',
+                color: '#ffd700'
+            },
+            munich: {
+                name: '慕尼黑',
+                nameEn: 'Munich',
+                lat: 48.1351,
+                lon: 11.5820,
+                timezone: 'Europe/Berlin',
+                color: '#00d9ff'
+            }
+        };
+        
+        // 初始化地图 - 调整视图以包含所有三个城市
+        const map = L.map('map', {
+            center: [45, 70],
+            zoom: 3,
+            zoomControl: false
+        });
+        
+        // 使用深色地图主题
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // 添加缩放控件到右下角
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        
+        // 创建自定义标记图标
+        function createMarker(color, cityKey) {
+            return L.divIcon({
+                className: 'custom-marker',
+                html: `<div class="marker-pulse" style="width:16px;height:16px;background:${color};border-radius:50%;box-shadow:0 0 10px ${color};"></div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+        }
+        
+        // 添加城市标记
+        Object.keys(cities).forEach(key => {
+            const city = cities[key];
+            const marker = L.marker([city.lat, city.lon], {
+                icon: createMarker(city.color, key)
+            }).addTo(map);
+            
+            marker.bindPopup(`
+                <div style="text-align:center;">
+                    <strong>${city.name}</strong><br/>
+                    <span style="opacity:0.7;">${city.nameEn}</span>
+                </div>
+            `);
+        });
+        
+        // 航班数据 (基于您的实际预订信息)
+        const flightData = {
+            OS016: {
+                departure: { hour: 9, minute: 30 }, // 上海时间 09:30 (PVG Terminal 2)
+                arrival: { hour: 15, minute: 55 }, // 维也纳时间 15:55 (VIE Terminal 3)
+                duration: { hours: 12, minutes: 25 } // 实际飞行时间
+            },
+            OS189: {
+                departure: { hour: 19, minute: 55 }, // 维也纳时间 19:55 (VIE Terminal 3)
+                arrival: { hour: 20, minute: 55 }, // 慕尼黑时间 20:55 (MUC Terminal 2)
+                duration: { hours: 1, minutes: 0 } // 实际飞行时间
+            },
+            CA828: {
+                departure: { hour: 13, minute: 20 }, // 慕尼黑时间 13:20 (估算典型时间)
+                arrival: { hour: 5, minute: 50, nextDay: true }, // 上海时间次日 05:50 (估算)
+                duration: { hours: 10, minutes: 30 } // 实际飞行时间 (估算)
+            }
+        };
+
+        
+        // OS 016 航线途经点 (上海 → 维也纳)
+        const route1Waypoints = [
+            { lat: 31.23, lon: 121.47, name: '上海浦东', desc: 'Shanghai Pudong', country: '🇨🇳 中国 China', warning: false },
+            { lat: 40.5, lon: 111.0, name: '呼和浩特', desc: 'Hohhot area', country: '🇨🇳 中国 China', warning: false },
+            { lat: 47.5, lon: 106.9, name: '乌兰巴托', desc: 'Ulaanbaatar', country: '🇲🇳 蒙古 Mongolia', warning: false },
+            { lat: 52.0, lon: 104.0, name: '伊尔库茨克', desc: 'Irkutsk region', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 55.0, lon: 92.0, name: '克拉斯诺亚尔斯克', desc: 'Krasnoyarsk area', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 56.5, lon: 84.0, name: '托木斯克', desc: 'Tomsk region', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 56.8, lon: 60.6, name: '叶卡捷琳堡', desc: 'Yekaterinburg', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 56.0, lon: 44.0, name: '下诺夫哥罗德', desc: 'Nizhny Novgorod', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 53.9, lon: 27.6, name: '明斯克', desc: 'Minsk', country: '🇧🇾 白俄罗斯 Belarus', warning: true },
+            { lat: 52.2, lon: 21.0, name: '华沙', desc: 'Warsaw', country: '🇵🇱 波兰 Poland', warning: false },
+            { lat: 50.1, lon: 18.0, name: '克拉科夫', desc: 'Krakow area', country: '🇵🇱 波兰 Poland', warning: false },
+            { lat: 48.21, lon: 16.37, name: '维也纳', desc: 'Vienna', country: '🇦🇹 奥地利 Austria', warning: false }
+        ];
+        
+        // CA 828 返程航线途经点 (慕尼黑 → 上海)
+        const returnWaypoints = [
+            { lat: 48.13, lon: 11.58, name: '慕尼黑', desc: 'Munich', country: '🇩🇪 德国 Germany', warning: false },
+            { lat: 50.0, lon: 18.0, name: '克拉科夫', desc: 'Krakow area', country: '🇵🇱 波兰 Poland', warning: false },
+            { lat: 52.0, lon: 27.0, name: '明斯克', desc: 'Minsk area', country: '🇧🇾 白俄罗斯 Belarus', warning: true },
+            { lat: 55.8, lon: 37.6, name: '莫斯科', desc: 'Moscow', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 56.8, lon: 60.6, name: '叶卡捷琳堡', desc: 'Yekaterinburg', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 55.0, lon: 82.9, name: '新西伯利亚', desc: 'Novosibirsk', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 52.0, lon: 104.0, name: '伊尔库茨克', desc: 'Irkutsk region', country: '🇷🇺 俄罗斯 Russia', warning: true },
+            { lat: 47.5, lon: 106.9, name: '乌兰巴托', desc: 'Ulaanbaatar', country: '🇲🇳 蒙古 Mongolia', warning: false },
+            { lat: 43.8, lon: 116.4, name: '锡林浩特', desc: 'Xilinhot area', country: '🇨🇳 中国 China', warning: false },
+            { lat: 39.9, lon: 116.4, name: '北京', desc: 'Beijing', country: '🇨🇳 中国 China', warning: false },
+            { lat: 31.23, lon: 121.47, name: '上海浦东', desc: 'Shanghai Pudong', country: '🇨🇳 中国 China', warning: false }
+        ];
+        
+        // 绘制OS 016航线 (上海 → 维也纳) - 通过实际途经点
+        const route1Path = route1Waypoints.map(wp => [wp.lat, wp.lon]);
+        L.polyline(route1Path, {
+            color: '#e94560',
+            weight: 3,
+            opacity: 0.8,
+            dashArray: '10, 5',
+            className: 'flight-route-line'
+        }).addTo(map).bindPopup('✈️ OS 016: 上海 → 维也纳<br/><small>点击途经点查看详情</small>');
+        
+        // 绘制OS 189航线 (维也纳 → 慕尼黑)
+        const route2Path = [
+            [cities.vienna.lat, cities.vienna.lon],
+            [cities.munich.lat, cities.munich.lon]
+        ];
+        L.polyline(route2Path, {
+            color: '#00d9ff',
+            weight: 3,
+            opacity: 0.8,
+            dashArray: '10, 5',
+            className: 'flight-route-line'
+        }).addTo(map).bindPopup('✈️ OS 189: 维也纳 → 慕尼黑');
+        
+        // 绘制CA 828返程航线 (慕尼黑 → 上海)
+        const returnPath = returnWaypoints.map(wp => [wp.lat, wp.lon]);
+        L.polyline(returnPath, {
+            color: '#9c27b0',
+            weight: 3,
+            opacity: 0.7,
+            dashArray: '10, 5',
+            className: 'flight-route-line'
+        }).addTo(map).bindPopup('✈️ CA 828: 慕尼黑 → 上海 (返程)<br/><small>点击途经点查看详情</small>');
+        
+        // 添加OS 016航线途经点标记
+        route1Waypoints.forEach((waypoint, index) => {
+            // 跳过起点和终点（已有城市标记）
+            if (index === 0 || index === route1Waypoints.length - 1) return;
+            
+            const markerColor = waypoint.warning ? '#ff9800' : '#4CAF50';
+            
+            const waypointIcon = L.divIcon({
+                className: 'waypoint-marker',
+                html: `<div style="width:8px;height:8px;background:${markerColor};border:2px solid white;border-radius:50%;box-shadow:0 0 8px ${markerColor};"></div>`,
+                iconSize: [8, 8],
+                iconAnchor: [4, 4]
+            });
+            
+            const marker = L.marker([waypoint.lat, waypoint.lon], {
+                icon: waypointIcon
+            }).addTo(map);
+            
+            marker.bindPopup(`
+                <div style="text-align:center;min-width:140px;">
+                    <strong>${waypoint.name}</strong><br/>
+                    <span style="opacity:0.7;font-size:10px;">${waypoint.desc}</span><br/>
+                    <span style="opacity:0.8;font-size:11px;">${waypoint.country}</span>
+                    ${waypoint.warning ? '<br/><span style="color:#ff9800;font-size:11px;">⚠️ 注意区域 Warning Zone</span>' : ''}
+                </div>
+            `);
+        });
+        
+        // 添加返程航线途经点标记
+        returnWaypoints.forEach((waypoint, index) => {
+            // 跳过起点和终点（已有城市标记）
+            if (index === 0 || index === returnWaypoints.length - 1) return;
+            
+            const markerColor = waypoint.warning ? '#ff9800' : '#9c27b0';
+            
+            const waypointIcon = L.divIcon({
+                className: 'waypoint-marker',
+                html: `<div style="width:8px;height:8px;background:${markerColor};border:2px solid white;border-radius:50%;box-shadow:0 0 6px ${markerColor};"></div>`,
+                iconSize: [8, 8],
+                iconAnchor: [4, 4]
+            });
+            
+            const marker = L.marker([waypoint.lat, waypoint.lon], {
+                icon: waypointIcon
+            }).addTo(map);
+            
+            marker.bindPopup(`
+                <div style="text-align:center;min-width:140px;">
+                    <strong>🔙 ${waypoint.name}</strong><br/>
+                    <span style="opacity:0.7;font-size:10px;">${waypoint.desc}</span><br/>
+                    <span style="opacity:0.8;font-size:11px;">${waypoint.country}</span>
+                    ${waypoint.warning ? '<br/><span style="color:#ff9800;font-size:11px;">⚠️ 注意区域 Warning Zone</span>' : ''}
+                    <br/><span style="color:#9c27b0;font-size:10px;">返程 Return Flight</span>
+                </div>
+            `);
+        });
+        
+        // 获取穿衣建议
+        function getClothingTip(temp) {
+            if (temp < 10) {
+                return { icon: '🧥', text: '建议穿羽绒服或棉衣保暖' };
+            } else if (temp < 15) {
+                return { icon: '🧥', text: '建议穿厚外套' };
+            } else if (temp < 20) {
+                return { icon: '🧶', text: '建议穿薄外套或针织衫' };
+            } else if (temp < 25) {
+                return { icon: '👕', text: '建议穿长袖衬衫或薄款上衣' };
+            } else {
+                return { icon: '🎽', text: '建议穿短袖轻衣物' };
+            }
+        }
+        
+        // 天气代码映射
+        function getWeatherInfo(code) {
+            const weatherMap = {
+                0: { icon: '☀️', desc: '晴天' },
+                1: { icon: '🌤️', desc: '晴间多云' },
+                2: { icon: '⛅', desc: '多云' },
+                3: { icon: '☁️', desc: '阴天' },
+                45: { icon: '🌫️', desc: '雾' },
+                48: { icon: '🌫️', desc: '雾' },
+                51: { icon: '🌧️', desc: '小毛毛雨' },
+                53: { icon: '🌧️', desc: '中雨' },
+                55: { icon: '🌧️', desc: '大雨' },
+                61: { icon: '🌧️', desc: '小雨' },
+                63: { icon: '🌧️', desc: '中雨' },
+                65: { icon: '🌧️', desc: '大雨' },
+                71: { icon: '🌨️', desc: '小雪' },
+                73: { icon: '🌨️', desc: '中雪' },
+                75: { icon: '🌨️', desc: '大雪' },
+                77: { icon: '🌨️', desc: '雪粒' },
+                80: { icon: '🌦️', desc: '阵雨' },
+                81: { icon: '🌦️', desc: '阵雨' },
+                82: { icon: '🌦️', desc: '强阵雨' },
+                85: { icon: '🌨️', desc: '阵雪' },
+                86: { icon: '🌨️', desc: '阵雪' },
+                95: { icon: '⚡', desc: '雷暴' },
+                96: { icon: '⚡', desc: '雷暴+冰雹' },
+                99: { icon: '⚡', desc: '强雷暴+冰雹' }
+            };
+            return weatherMap[code] || { icon: '🌤️', desc: '未知' };
+        }
+        
+        // 更新本地时间
+        function updateTime(cityKey) {
+            const city = cities[cityKey];
+            const now = new Date();
+            const options = {
+                timeZone: city.timezone,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+            };
+            const timeStr = now.toLocaleTimeString('zh-CN', options);
+            document.getElementById(`time-${cityKey}`).textContent = timeStr;
+        }
+        
+        // 更新航班时间信息
+        function updateFlightTimes() {
+            // 简化方法：直接显示固定的航班时间
+            // OS 016: 上海 09:30 → 维也纳 15:55
+            document.getElementById('flight1-departure').textContent = 
+                `${String(flightData.OS016.departure.hour).padStart(2, '0')}:${String(flightData.OS016.departure.minute).padStart(2, '0')}`;
+            document.getElementById('flight1-arrival').textContent = 
+                `${String(flightData.OS016.arrival.hour).padStart(2, '0')}:${String(flightData.OS016.arrival.minute).padStart(2, '0')}`;
+            document.getElementById('flight1-duration').textContent = 
+                `${flightData.OS016.duration.hours}小时${flightData.OS016.duration.minutes}分钟`;
+            
+            // OS 189: 维也纳 19:55 → 慕尼黑 20:55
+            document.getElementById('flight2-departure').textContent = 
+                `${String(flightData.OS189.departure.hour).padStart(2, '0')}:${String(flightData.OS189.departure.minute).padStart(2, '0')}`;
+            document.getElementById('flight2-arrival').textContent = 
+                `${String(flightData.OS189.arrival.hour).padStart(2, '0')}:${String(flightData.OS189.arrival.minute).padStart(2, '0')}`;
+            document.getElementById('flight2-duration').textContent = 
+                `${flightData.OS189.duration.hours}小时${flightData.OS189.duration.minutes}分钟`;
+            
+            // 转机时间：4小时0分钟
+            document.getElementById('transfer-duration').textContent = '4小时0分钟';
+            
+            // 总行程时间：17小时25分钟
+            document.getElementById('total-duration').textContent = '17小时25分钟';
+            
+            // CA 828: 慕尼黑 → 上海 (返程)
+            document.getElementById('return-departure').textContent = 
+                `${String(flightData.CA828.departure.hour).padStart(2, '0')}:${String(flightData.CA828.departure.minute).padStart(2, '0')}`;
+            document.getElementById('return-arrival').textContent = 
+                `${String(flightData.CA828.arrival.hour).padStart(2, '0')}:${String(flightData.CA828.arrival.minute).padStart(2, '0')}`;
+            document.getElementById('return-duration').textContent = 
+                `${flightData.CA828.duration.hours}小时${flightData.CA828.duration.minutes}分钟`;
+        }
+        
+        // 获取天气数据（包含24小时数据）
+        async function fetchWeather(cityKey) {
+            const city = cities[cityKey];
+            // 添加更多参数以获取完整数据
+            const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current=temperature_2m,weather_code&hourly=temperature_2m&timezone=${city.timezone}&forecast_days=2`;
+            
+            // 显示加载状态
+            document.getElementById(`desc-${cityKey}`).textContent = '加载中...';
+            
+            try {
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP错误: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // 验证数据完整性
+                if (!data.current || !data.hourly || !data.hourly.temperature_2m) {
+                    throw new Error('数据格式不完整');
+                }
+                
+                const weatherCode = data.current.weather_code;
+                const currentTemp = Math.round(data.current.temperature_2m);
+                
+                // 处理24小时数据
+                const now = new Date();
+                const hourlyTemps = [];
+                const hourlyLabels = [];
+                
+                // 获取接下来24小时的数据
+                for (let i = 0; i < 24 && i < data.hourly.temperature_2m.length; i++) {
+                    hourlyTemps.push(Math.round(data.hourly.temperature_2m[i]));
+                    const hour = (now.getHours() + i) % 24;
+                    hourlyLabels.push(hour === 0 ? '0时' : `${hour}`);
+                }
+                
+                // 更新UI
+                document.getElementById(`temp-${cityKey}`).textContent = `${currentTemp}°C`;
+                
+                const weather = getWeatherInfo(weatherCode);
+                document.getElementById(`icon-${cityKey}`).textContent = weather.icon;
+                document.getElementById(`desc-${cityKey}`).textContent = weather.desc;
+                
+                const clothing = getClothingTip(currentTemp);
+                document.getElementById(`clothing-${cityKey}`).innerHTML = `
+                    <span class="icon">${clothing.icon}</span>
+                    <span>${clothing.text}</span>
+                `;
+                
+                // 计算最高最低温度
+                if (hourlyTemps.length > 0) {
+                    const maxTemp = Math.max(...hourlyTemps);
+                    const minTemp = Math.min(...hourlyTemps);
+                    document.getElementById(`temprange-${cityKey}`).textContent = 
+                        `最高 ${maxTemp}°C  最低 ${minTemp}°C`;
+                    
+                    // 绘制温度曲线
+                    drawTemperatureChart(cityKey, hourlyTemps, hourlyLabels, maxTemp, minTemp);
+                }
+                
+                console.log(`✅ ${city.name}天气数据加载成功`);
+                
+            } catch (error) {
+                console.error(`❌ 获取${city.name}天气失败:`, error);
+                document.getElementById(`temp-${cityKey}`).textContent = '--°C';
+                document.getElementById(`icon-${cityKey}`).textContent = '❌';
+                document.getElementById(`desc-${cityKey}`).textContent = '无法获取天气';
+                document.getElementById(`clothing-${cityKey}`).innerHTML = `
+                    <span class="icon">⚠️</span>
+                    <span>天气服务暂时不可用</span>
+                `;
+                document.getElementById(`temprange-${cityKey}`).textContent = '请稍后刷新';
+            }
+        }
+        
+        // 绘制温度曲线图
+        function drawTemperatureChart(cityKey, temps, labels, maxTemp, minTemp) {
+            const canvas = document.getElementById(`chart-${cityKey}`);
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // 清空画布
+            ctx.clearRect(0, 0, width, height);
+            
+            // 设置样式
+            ctx.strokeStyle = cities[cityKey].color;
+            ctx.fillStyle = cities[cityKey].color;
+            ctx.lineWidth = 2;
+            
+            // 计算坐标
+            const padding = 20;
+            const chartWidth = width - padding * 2;
+            const chartHeight = height - padding * 2;
+            const tempRange = maxTemp - minTemp || 1;
+            
+            // 绘制曲线
+            ctx.beginPath();
+            temps.forEach((temp, i) => {
+                const x = padding + (chartWidth / (temps.length - 1)) * i;
+                const y = padding + chartHeight - ((temp - minTemp) / tempRange) * chartHeight;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+            
+            // 绘制数据点和温度标签
+            ctx.font = '11px "Noto Sans SC"';
+            ctx.textAlign = 'center';
+            temps.forEach((temp, i) => {
+                const x = padding + (chartWidth / (temps.length - 1)) * i;
+                const y = padding + chartHeight - ((temp - minTemp) / tempRange) * chartHeight;
+                
+                // 绘制点
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 绘制温度标签（每隔3小时显示一次）
+                if (i % 3 === 0 || i === temps.length - 1) {
+                    ctx.fillText(`${temp}°`, x, y - 8);
+                }
+            });
+            
+            // 显示小时标签（每隔3小时显示一次）
+            const hoursContainer = document.getElementById(`hours-${cityKey}`);
+            hoursContainer.innerHTML = '';
+            labels.forEach((label, i) => {
+                if (i % 3 === 0 || i === labels.length - 1) {
+                    const span = document.createElement('span');
+                    span.textContent = label;
+                    hoursContainer.appendChild(span);
+                }
+            });
+        }
+        
+        // 添加卡片点击事件
+        function setupCardToggle() {
+            ['munich', 'vienna', 'shanghai'].forEach(cityKey => {
+                const card = document.getElementById(`card-${cityKey}`);
+                const indicator = card.querySelector('.expand-indicator');
+                
+                card.addEventListener('click', (e) => {
+                    // 防止点击链接时触发
+                    if (e.target.tagName === 'A') return;
+                    
+                    card.classList.toggle('expanded');
+                    if (card.classList.contains('expanded')) {
+                        indicator.textContent = '点击收起 Click to collapse ▲';
+                    } else {
+                        indicator.textContent = '点击展开详情 Click for details ▼';
+                    }
+                });
+            });
+        }
+        
+        // 初始化
+        function init() {
+            // 更新时间
+            Object.keys(cities).forEach(key => {
+                updateTime(key);
+            });
+            
+            // 每秒更新时间
+            setInterval(() => {
+                Object.keys(cities).forEach(key => {
+                    updateTime(key);
+                });
+            }, 1000);
+            
+            // 获取天气
+            Object.keys(cities).forEach(key => {
+                fetchWeather(key);
+            });
+            
+            // 每10分钟更新天气
+            setInterval(() => {
+                Object.keys(cities).forEach(key => {
+                    fetchWeather(key);
+                });
+            }, 600000);
+            
+            // 更新航班信息
+            updateFlightTimes();
+            
+            // 每分钟更新航班时间
+            setInterval(updateFlightTimes, 60000);
+            
+            // 设置卡片展开/收起功能
+            setupCardToggle();
+        }
+        
+        // 启动
+        init();
+    </script>
+</body>
+</html>
